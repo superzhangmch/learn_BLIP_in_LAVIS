@@ -182,7 +182,7 @@ class Blip2Qformer(Blip2Base):
                 sim_t2i.masked_fill_(mask, -10000)
                 sim_i2t.masked_fill_(mask, -10000)
             else:    
-                sim_t2i[:, rank * bs : rank * bs + bs].fill_diagonal_(-10000)
+                sim_t2i[:, rank * bs : rank * bs + bs].fill_diagonal_(-10000) # batch内根据预测概率随机选一个不match的作负样本。为了防止采样到match的，所以强行把match的设置为-10000，从而softmax后对应位置概率极小
                 sim_i2t[:, rank * bs : rank * bs + bs].fill_diagonal_(-10000)            
                 
             weights_t2i = F.softmax(sim_t2i, dim=1)
@@ -191,7 +191,7 @@ class Blip2Qformer(Blip2Base):
         # select a negative image for each text
         image_embeds_neg = []
         for b in range(bs):
-            neg_idx = torch.multinomial(weights_t2i[b], 1).item()
+            neg_idx = torch.multinomial(weights_t2i[b], 1).item() # 对每个text按概率采样一个image，作为负样本。
             image_embeds_neg.append(image_embeds_world[neg_idx])
         image_embeds_neg = torch.stack(image_embeds_neg, dim=0)
 
@@ -199,7 +199,7 @@ class Blip2Qformer(Blip2Base):
         text_ids_neg = []
         text_atts_neg = []
         for b in range(bs):
-            neg_idx = torch.multinomial(weights_i2t[b], 1).item()
+            neg_idx = torch.multinomial(weights_i2t[b], 1).item() # 对每个image，按概率采样一个text，作为负样本
             text_ids_neg.append(text_input_ids_world[neg_idx])
             text_atts_neg.append(text_attention_mask_world[neg_idx])
 
@@ -207,7 +207,7 @@ class Blip2Qformer(Blip2Base):
         text_atts_neg = torch.stack(text_atts_neg, dim=0)
 
         text_ids_all = torch.cat(
-            [text_tokens.input_ids, text_tokens.input_ids, text_ids_neg], dim=0
+            [text_tokens.input_ids, text_tokens.input_ids, text_ids_neg], dim=0 # 三组，对应：正样本，text的负image样本，image的负text样本。故而要分三组
         )  # pos, pos, neg
         text_atts_all = torch.cat(
             [text_tokens.attention_mask, text_tokens.attention_mask, text_atts_neg],
@@ -221,7 +221,7 @@ class Blip2Qformer(Blip2Base):
         attention_mask_all = torch.cat([query_atts_itm, text_atts_all], dim=1) # learned queries token 与 caption text token 拼接
 
         image_embeds_all = torch.cat(
-            [image_embeds, image_embeds_neg, image_embeds], dim=0
+            [image_embeds, image_embeds_neg, image_embeds], dim=0 # 三组，对应：正样本，text的iamge负样本，image的text负样本
         )  # pos, neg, pos
         image_atts_all = torch.ones(image_embeds_all.size()[:-1], dtype=torch.long).to(
             image.device
