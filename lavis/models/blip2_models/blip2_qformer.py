@@ -91,14 +91,14 @@ class Blip2Qformer(Blip2Base):
         image = samples["image"]
         text = samples["text_input"]
 
-        image_embeds = self.ln_vision(self.visual_encoder(image))
-        image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(
+        image_embeds = self.ln_vision(self.visual_encoder(image)) # ln_vision: layerNorm_vision
+        image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to( # 全 1 mask
             image.device
         )
 
-        query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1)
+        query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1) # 即paper中的 “learned queries”
 
-        query_output = self.Qformer.bert(
+        query_output = self.Qformer.bert( # learned queries 与 image cross atten，没text参与
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
             encoder_attention_mask=image_atts,
@@ -106,7 +106,7 @@ class Blip2Qformer(Blip2Base):
             return_dict=True,
         )
 
-        image_feats = F.normalize(
+        image_feats = F.normalize( # 用于计算 contrastive loss
             self.vision_proj(query_output.last_hidden_state), dim=-1
         )
 
@@ -117,12 +117,12 @@ class Blip2Qformer(Blip2Base):
             max_length=self.max_txt_len,
             return_tensors="pt",
         ).to(image.device)
-        text_output = self.Qformer.bert(
+        text_output = self.Qformer.bert( # text self attention，没 learned queries 参与。用于计算 contrastive loss
             text_tokens.input_ids,
             attention_mask=text_tokens.attention_mask,
             return_dict=True,
         )
-        text_feat = F.normalize(
+        text_feat = F.normalize( # 用于计算 contrastive loss
             self.text_proj(text_output.last_hidden_state[:, 0, :]), dim=-1
         )
 
@@ -167,7 +167,7 @@ class Blip2Qformer(Blip2Base):
             loss_i2t = -torch.sum(F.log_softmax(sim_i2t, dim=1)*sim_targets,dim=1).mean()     
             loss_itc = (loss_t2i+loss_i2t)/2  
         else:                     
-            loss_itc = (
+            loss_itc = ( # contrastive Loss 项
                 F.cross_entropy(sim_i2t, targets, label_smoothing=0.1)
                 + F.cross_entropy(sim_t2i, targets, label_smoothing=0.1)
             ) / 2
