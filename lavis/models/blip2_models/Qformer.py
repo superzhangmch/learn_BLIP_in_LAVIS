@@ -674,7 +674,7 @@ class BertPreTrainedModel(PreTrainedModel):
             module.bias.data.zero_()
 
 
-class BertModel(BertPreTrainedModel):
+class BertModel(BertPreTrainedModel): # Qformer 最终用到的就是它
     """
     The model can behave as an encoder (with only self-attention) as well as a decoder, in which case a layer of
     cross-attention is added between the self-attention layers, following the architecture described in `Attention is
@@ -682,6 +682,8 @@ class BertModel(BertPreTrainedModel):
     Llion Jones, Aidan N. Gomez, Lukasz Kaiser and Illia Polosukhin.
     argument and :obj:`add_cross_attention` set to :obj:`True`; an :obj:`encoder_hidden_states` is then expected as an
     input to the forward pass.
+    注意：blip2有的地方需要cross attention，有的地方不需要。而从上面描述本 class “behave as an encoder (with only self-attention) as well as a decoder, in which case a layer of
+    cross-attention is added between the self-attention layers” ，所以可以满足blip2的transformer的要求
     """
 
     def __init__(self, config, add_pooling_layer=False):
@@ -865,7 +867,7 @@ class BertModel(BertPreTrainedModel):
 
         query_length = query_embeds.shape[1] if query_embeds is not None else 0
 
-        embedding_output = self.embeddings(
+        embedding_output = self.embeddings( # 若 query_embdes 存在，则会把它与input_ids查表拿到的embedding 作拼接成一个更长的sequence
             input_ids=input_ids,
             position_ids=position_ids,
             query_embeds=query_embeds,
@@ -965,7 +967,7 @@ class BertModel(BertPreTrainedModel):
         )
 
 
-class BertLMHeadModel(BertPreTrainedModel):
+class BertLMHeadModel(BertPreTrainedModel): # Qformer指向此class，内部指向class BertModel
 
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
     _keys_to_ignore_on_load_missing = [r"position_ids", r"predictions.decoder.bias"]
@@ -990,9 +992,9 @@ class BertLMHeadModel(BertPreTrainedModel):
         attention_mask=None,
         position_ids=None,
         head_mask=None,
-        query_embeds=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
+        query_embeds=None, # 相比huggingface原始代码，这个是新增的参数
+        encoder_hidden_states=None,  # for cross_attn
+        encoder_attention_mask=None, # for cross_attn
         labels=None,
         past_key_values=None,
         use_cache=True,
