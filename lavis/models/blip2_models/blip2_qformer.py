@@ -218,7 +218,7 @@ class Blip2Qformer(Blip2Base):
         query_atts_itm = torch.ones(query_tokens_itm.size()[:-1], dtype=torch.long).to(
             image.device
         )
-        attention_mask_all = torch.cat([query_atts_itm, text_atts_all], dim=1)
+        attention_mask_all = torch.cat([query_atts_itm, text_atts_all], dim=1) # learned queries token 与 caption text token 拼接
 
         image_embeds_all = torch.cat(
             [image_embeds, image_embeds_neg, image_embeds], dim=0
@@ -228,11 +228,11 @@ class Blip2Qformer(Blip2Base):
         )
 
         output_itm = self.Qformer.bert(
-            text_ids_all,
-            query_embeds=query_tokens_itm,
+            text_ids_all, 
+            query_embeds=query_tokens_itm, # 在内部会把query token 与 text ids token 拼成一个更长的序列，然后在此长序列上作 self attention
             attention_mask=attention_mask_all,
-            encoder_hidden_states=image_embeds_all,
-            encoder_attention_mask=image_atts_all,
+            encoder_hidden_states=image_embeds_all, # 上面拼接后的长序列与 iamge embeds 作 cross attention
+            encoder_attention_mask=image_atts_all,  # 上面拼接后的长序列与 iamge embeds 作 cross attention
             return_dict=True,
         )
 
@@ -248,19 +248,19 @@ class Blip2Qformer(Blip2Base):
 
         ##================= Image Captioning ========================##
         decoder_input_ids = text_tokens.input_ids.clone()
-        decoder_input_ids[:, 0] = self.tokenizer.bos_token_id
-        labels = decoder_input_ids.masked_fill(
+        decoder_input_ids[:, 0] = self.tokenizer.bos_token_id # 不用CLS token
+        labels = decoder_input_ids.masked_fill( # 把 caption文本不够不足部分 mask 掉
             decoder_input_ids == self.tokenizer.pad_token_id, -100
         )
 
         query_atts = torch.ones(query_tokens.size()[:-1], dtype=torch.long).to(
             image.device
         )
-        attention_mask = torch.cat([query_atts, text_tokens.attention_mask], dim=1)
+        attention_mask = torch.cat([query_atts, text_tokens.attention_mask], dim=1) # 全 1 mask与 text的三角mask作拼接
         lm_output = self.Qformer(
-            decoder_input_ids,
+            decoder_input_ids, # image caption text
             attention_mask=attention_mask,
-            past_key_values=query_output.past_key_values,
+            past_key_values=query_output.past_key_values, # 把imageTransformer的self attention的k-v pair list直接拼到这里k-v pair list的前面. 即: self_attn时，Q与更长的K/V相作用
             return_dict=True,
             labels=labels,
         )
