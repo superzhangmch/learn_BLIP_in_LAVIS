@@ -88,6 +88,9 @@ class Blip2Qformer(Blip2Base):
         self.max_txt_len = max_txt_len
 
     def forward(self, samples):
+        '''
+        第一阶段的训练：
+        '''
         image = samples["image"]
         text = samples["text_input"]
 
@@ -104,7 +107,7 @@ class Blip2Qformer(Blip2Base):
             encoder_attention_mask=image_atts,
             use_cache=True,
             return_dict=True,
-        )
+        )   # 此时，is_decoder = False(见Qformer.py), 故不启用 causal attn mask
 
         image_feats = F.normalize( # 用于计算 contrastive loss
             self.vision_proj(query_output.last_hidden_state), dim=-1
@@ -121,7 +124,7 @@ class Blip2Qformer(Blip2Base):
             text_tokens.input_ids,
             attention_mask=text_tokens.attention_mask,
             return_dict=True,
-        )
+        )   # 此时，is_decoder = False(见Qformer.py), 故不启用 causal attn mask
         text_feat = F.normalize( # 用于计算 contrastive loss
             self.text_proj(text_output.last_hidden_state[:, 0, :]), dim=-1
         )
@@ -227,7 +230,7 @@ class Blip2Qformer(Blip2Base):
             image.device
         )
 
-        output_itm = self.Qformer.bert(
+        output_itm = self.Qformer.bert( # 此时，is_decoder = False(见Qformer.py), 故不启用 causal attn mask
             text_ids_all, 
             query_embeds=query_tokens_itm, # 在内部会把query token 与 text ids token 拼成一个更长的序列，然后在此长序列上作 self attention
             attention_mask=attention_mask_all,
@@ -257,9 +260,9 @@ class Blip2Qformer(Blip2Base):
             image.device
         )
         attention_mask = torch.cat([query_atts, text_tokens.attention_mask], dim=1) # 全 1 mask与 text的三角mask作拼接
-        lm_output = self.Qformer(
+        lm_output = self.Qformer(  # 此时，is_decoder = True（self.Qformer.bert才触发False）, 根据Qformer.py中实现，此时启用了 causal attn mask
             decoder_input_ids, # image caption text
-            attention_mask=attention_mask,
+            attention_mask=attention_mask, # 注意这里attention_mask 并非指的是attention中的mask矩阵，而是sequence mask，表示把序列中哪些元素屏蔽不参与attention
             past_key_values=query_output.past_key_values, # 把imageTransformer的self attention的k-v pair list直接拼到这里k-v pair list的前面. 即: self_attn时，Q与更长的K/V相作用
             return_dict=True,
             labels=labels,
