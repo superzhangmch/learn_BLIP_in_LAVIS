@@ -1,3 +1,7 @@
+本 fork 是为了学习 BLIP。通过对代码加更多的注释。
+<ul><li>BLIP2代码位置： lavis/models/blip2_models/</li>
+</ul>
+<hr>
 <p align="center">
     <br>
     <img src="docs/_static/logo_final.png" width="400"/>
