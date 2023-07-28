@@ -127,7 +127,7 @@ class Blip2Qformer(Blip2Base):
         )
 
         ###============== Image-text Contrastive ===================###
-        image_feats_all = concat_all_gather(
+        image_feats_all = concat_all_gather( # 背后实现用的torch的torch.distributed.all_gather
             image_feats
         )  # [batch_size*num_gpu, num_query_tokens, embed_dim]
         text_feat_all = concat_all_gather(text_feat)  # [batch_size*num_gpu, embed_dim]
@@ -175,9 +175,9 @@ class Blip2Qformer(Blip2Base):
         ###============== Image-text Matching ===================###
         text_input_ids_world = concat_all_gather(text_tokens.input_ids)
         text_attention_mask_world = concat_all_gather(text_tokens.attention_mask)
-        image_embeds_world = all_gather_with_grad(image_embeds)
+        image_embeds_world = all_gather_with_grad(image_embeds) # 背后用到了 torch.distributed.all_gather 与torch.distributed.all_reduce 来做前向与后向传播
         with torch.no_grad():
-            if "image_id" in samples.keys():
+            if "image_id" in samples.keys(): #coco retrieval finetuning
                 mask = torch.eq(image_ids, image_ids_all.t())
                 sim_t2i.masked_fill_(mask, -10000)
                 sim_i2t.masked_fill_(mask, -10000)
