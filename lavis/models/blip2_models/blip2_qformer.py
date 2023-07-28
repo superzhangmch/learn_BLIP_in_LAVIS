@@ -194,7 +194,7 @@ class Blip2Qformer(Blip2Base):
         # select a negative image for each text
         image_embeds_neg = []
         for b in range(bs):
-            neg_idx = torch.multinomial(weights_t2i[b], 1).item() # 对每个text按概率采样一个image，作为负样本。
+            neg_idx = torch.multinomial(weights_t2i[b], 1).item() # 对每个text按概率采样一个image，作为负样本。这就是paper中说的难负样本挖掘，源自作者的旧作<<ALBEF>>
             image_embeds_neg.append(image_embeds_world[neg_idx])
         image_embeds_neg = torch.stack(image_embeds_neg, dim=0)
 
