@@ -886,7 +886,7 @@ class BertModel(BertPreTrainedModel): # Qformer 最终用到的就是它
         # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
         # ourselves in which case we just need to make it broadcastable to all heads.
         if is_decoder:
-            extended_attention_mask = self.get_extended_attention_mask(
+            extended_attention_mask = self.get_extended_attention_mask( # 制备mask矩阵。is_decoder的时候，才会是三角mask矩阵
                 attention_mask,
                 input_ids.shape,
                 device,
@@ -894,7 +894,7 @@ class BertModel(BertPreTrainedModel): # Qformer 最终用到的就是它
                 has_query=(query_embeds is not None),
             )
         else:
-            extended_attention_mask = self.get_extended_attention_mask(
+            extended_attention_mask = self.get_extended_attention_mask( # 制备mask矩阵
                 attention_mask, input_shape, device, is_decoder
             )
 
@@ -1002,7 +1002,7 @@ class BertLMHeadModel(BertPreTrainedModel): # Qformer指向此class，内部指�
         output_hidden_states=None,
         return_dict=None,
         return_logits=False,
-        is_decoder=True,
+        is_decoder=True, # stage1的loss的3个部分之一的Image Captioning loss中，需要is_decoder=True
         reduction="mean",
     ):
         r"""
