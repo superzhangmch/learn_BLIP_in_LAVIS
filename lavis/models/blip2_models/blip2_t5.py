@@ -28,6 +28,8 @@ class Blip2T5(Blip2Base):
     Usage:
         >>> from lavis.models import load_model
         >>> model = load_model("blip2_t5", "pretrain_flant5xl")
+
+        for Qformer 的 stage 2 的训练
     """
 
     PRETRAINED_MODEL_CONFIG_DICT = {
@@ -61,7 +63,7 @@ class Blip2T5(Blip2Base):
         self.visual_encoder, self.ln_vision = self.init_vision_encoder(
             vit_model, img_size, drop_path_rate, use_grad_checkpoint, vit_precision
         )
-        if freeze_vit:
+        if freeze_vit: # 冻结图片encoder model
             for name, param in self.visual_encoder.named_parameters():
                 param.requires_grad = False
             self.visual_encoder = self.visual_encoder.eval()
@@ -85,7 +87,7 @@ class Blip2T5(Blip2Base):
             t5_model, config=t5_config
         )
 
-        for name, param in self.t5_model.named_parameters():
+        for name, param in self.t5_model.named_parameters(): # 冻结 LLM 模型
             param.requires_grad = False
             param.data = param.data.bfloat16()
 
@@ -100,7 +102,10 @@ class Blip2T5(Blip2Base):
         self._lemmatizer = None
 
     def forward(self, samples):
-        image = samples["image"]
+        '''
+        Qformer 的 stage 2 的训练 
+        '''
+        image = samples["image"] # samples内还有 samples["text_input"]，samples["text_output"]
 
         with self.maybe_autocast():
             image_embeds = self.ln_vision(self.visual_encoder(image))
@@ -111,12 +116,12 @@ class Blip2T5(Blip2Base):
         query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1)
         query_output = self.Qformer.bert(
             query_embeds=query_tokens,
-            encoder_hidden_states=image_embeds,
+            encoder_hidden_states=image_embeds, # query tokens 和 image 作 cross attn
             encoder_attention_mask=image_atts,
             return_dict=True,
         )
 
-        inputs_t5 = self.t5_proj(query_output.last_hidden_state)
+        inputs_t5 = self.t5_proj(query_output.last_hidden_state) # inputs_t5会当做 t5的普通token的input一般
         atts_t5 = torch.ones(inputs_t5.size()[:-1], dtype=torch.long).to(image.device)
 
         with self.maybe_autocast(dtype=torch.bfloat16):
@@ -142,7 +147,7 @@ class Blip2T5(Blip2Base):
             )
 
             inputs_embeds = self.t5_model.encoder.embed_tokens(input_tokens.input_ids)
-            inputs_embeds = torch.cat([inputs_t5, inputs_embeds], dim=1)
+            inputs_embeds = torch.cat([inputs_t5, inputs_embeds], dim=1) # 图片得到的token与文本token拼一起，作为t5 的输入
 
             outputs = self.t5_model(
                 inputs_embeds=inputs_embeds,
@@ -151,7 +156,7 @@ class Blip2T5(Blip2Base):
                 return_dict=True,
                 labels=targets,
             )
-            loss = outputs.loss
+            loss = outputs.loss # 仿佛在训练T5，但其实T5已经冻结了，只有T5的input 中的image tokens没冻结，从而通过这些tokens传到到其背后的Qformer。于是仿佛是训练T5，实际是更新了Qformer
 
             return {"loss": loss}
 
